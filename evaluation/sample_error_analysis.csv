@@ -1,0 +1,6 @@
+row_number,user_id,claim_object,mismatched_fields,expected_claim_status,predicted_claim_status,expected_issue_type,predicted_issue_type,expected_severity,predicted_severity,prediction_reason
+5,user_005,car,claim_status;issue_type;severity,contradicted,supported,scratch,dent,low,medium,"The rear bumper is visible with a clear dent, matching the claim."
+6,user_006,car,valid_image,not_enough_information,not_enough_information,unknown,unknown,unknown,unknown,The image does not provide a clear view of the headlight to assess the claimed crack.
+8,user_008,car,claim_status;issue_type;object_part;evidence_standard_met;severity,contradicted,not_enough_information,broken_part,unknown,high,unknown,The image does not provide a clear view of the hood to assess the claimed scratch.
+14,user_020,laptop,claim_status;issue_type;severity,contradicted,supported,none,scratch,none,low,"The image shows a scratch on the trackpad area, consistent with the claim of physical damage."
+20,user_034,package,claim_status;issue_type;severity,contradicted,supported,none,torn_packaging,none,medium,"The first image clearly shows the package with a torn seal area, matching the claim."

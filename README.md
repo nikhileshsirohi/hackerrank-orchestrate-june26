@@ -1,161 +1,152 @@
-# HackerRank Orchestrate
+# Multi-Modal Evidence Review
 
-Starter repository for the **HackerRank Orchestrate** 24-hour hackathon.
+This repository contains a runnable Python batch pipeline for the HackerRank Orchestrate damage-claim evidence review assignment.
 
-Build a system that verifies visual evidence for damage claims across three object types: **cars**, **laptops**, and **packages**.
+The system reads claim rows from CSV, sends each claim and its submitted images to GPT-4o Vision, validates the model's structured JSON output against the required enums, and writes a submission-ready `output.csv`.
 
-Your system will receive claim conversations, one or more submitted images, user claim history, and minimum evidence requirements. It must decide whether the submitted images support the claim, contradict it, or do not provide enough information.
+## What The Solution Does
 
-Read [`problem_statement.md`](./problem_statement.md) for the full task spec, input/output schema, and allowed values.
+- Reads `dataset/claims.csv` or `dataset/sample_claims.csv`.
+- Uses `claim_object`, `user_claim`, submitted images, user history, and evidence requirements.
+- Treats images as the primary source of truth.
+- Uses `dataset/user_history.csv` only for risk context.
+- Uses `dataset/evidence_requirements.csv` as the minimum evidence checklist.
+- Produces exactly the required output columns in the required order.
+- Evaluates predictions on labeled sample rows when expected columns are present.
 
----
-
-## Contents
-
-1. [Repository layout](#repository-layout)
-2. [What you need to build](#what-you-need-to-build)
-3. [Where your code goes](#where-your-code-goes)
-4. [Quickstart](#quickstart)
-5. [Evaluation](#evaluation)
-6. [Chat transcript logging](#chat-transcript-logging)
-7. [Submission](#submission)
-8. [Judge interview](#judge-interview)
-
----
-
-## Repository layout
+## Project Layout
 
 ```text
 .
-├── AGENTS.md                         # Rules for AI coding tools + transcript logging
-├── problem_statement.md              # Full task description and I/O schema
-├── README.md                         # You are here
-├── code/                             # Build your solution here
-│   ├── main.py                       # Suggested terminal entry point
-│   └── evaluation/
-│       └── main.py                   # Suggested evaluation entry point
-└── dataset/
-    ├── sample_claims.csv             # Inputs + expected outputs for development
-    ├── claims.csv                    # Inputs only; run your system on these rows
-    ├── user_history.csv              # Historical claim counts and risk context
-    ├── evidence_requirements.csv     # Minimum image evidence requirements
-    └── images/
-        ├── sample/                   # Images referenced by sample_claims.csv
-        └── test/                     # Images referenced by claims.csv
+├── dataset/
+├── src/
+│   ├── main.py
+│   ├── llm_client.py
+│   ├── prompts.py
+│   ├── schemas.py
+│   ├── utils.py
+│   └── evaluator.py
+├── code/
+│   ├── main.py
+│   └── evaluation/main.py
+├── evaluation/
+│   ├── evaluation_report.md
+│   └── sample_eval_results.csv
+├── requirements.txt
+├── README.md
+└── output.csv
 ```
 
----
+`code/` contains compatibility wrappers for the starter repository entry points. The main implementation lives in `src/`.
 
-## What you need to build
+## Install Dependencies
 
-A system that, for each row in `dataset/claims.csv`, produces one row in `output.csv`.
-
-Input fields:
-
-| Column | Meaning |
-|---|---|
-| `user_id` | User submitting the claim; use this to look up `dataset/user_history.csv` |
-| `image_paths` | One or more submitted image paths, separated by semicolons |
-| `user_claim` | Chat transcript describing the issue |
-| `claim_object` | `car`, `laptop`, or `package` |
-
-Required output fields:
-
-| Column | Meaning |
-|---|---|
-| `evidence_standard_met` | Whether the image set is sufficient to evaluate the claim |
-| `evidence_standard_met_reason` | Short reason for the evidence decision |
-| `risk_flags` | Semicolon-separated risk flags, or `none` |
-| `issue_type` | Visible issue type |
-| `object_part` | Relevant object part |
-| `claim_status` | `supported`, `contradicted`, or `not_enough_information` |
-| `claim_status_justification` | Concise explanation grounded in the image evidence |
-| `supporting_image_ids` | Image IDs supporting the decision, or `none` |
-| `valid_image` | Whether the image set is usable for automated review |
-| `severity` | `none`, `low`, `medium`, `high`, or `unknown` |
-
-Hard requirements:
-
-- Must read the provided CSV files and local images.
-- Must produce `output.csv` with the exact schema in `problem_statement.md`.
-- Must include an evaluation workflow
-- Must avoid hardcoded test labels or file-specific answers.
-
-Beyond that you are free to bring your own approach: VLMs, LLMs, structured prompting, rule layers, batching, caching, evaluation pipelines, model comparison, or anything else.
-
----
-
-## Where your code goes
-
-All of your work belongs in [`code/`](./code/). The repo ships with empty starter files that you can grow into your full solution.
-
-Suggested conventions:
-
-- Put your main runnable solution in `code/main.py`, or document your own entry point clearly.
-- Put evaluation code under `code/evaluation/` or an `evaluation/` folder included in your final `code.zip`.
-- Write final predictions to `output.csv`.
-
----
-
-## Quickstart
-
-Clone this repository:
+Use Python 3.10+.
 
 ```bash
-git clone git@github.com:interviewstreet/hackerrank-orchestrate-june26.git
-cd hackerrank-orchestrate-june26
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-You are free to use any language or runtime. Python, JavaScript, and TypeScript are all reasonable choices.
+## Set The API Key
 
----
+The OpenAI key is read from the environment only.
 
-## Evaluation
+```bash
+export OPENAI_API_KEY="your_api_key_here"
+```
 
-The evaluation report should include:
+You can also create a local `.env` file:
 
-- metrics on `dataset/sample_claims.csv`
-- at least two strategies, prompts, or model configurations compared
-- the final strategy used for `output.csv`
-- operational analysis covering model calls, token usage, image usage, approximate cost, runtime, and TPM/RPM considerations
+```text
+OPENAI_API_KEY=your_api_key_here
+```
 
----
+Do not commit `.env`.
 
-## Chat transcript logging
+## Run Sample Evaluation
 
-This repo ships with an `AGENTS.md` that modern AI coding tools may read. It instructs the tool to append conversation turns to a shared log file:
+```bash
+python src/evaluator.py --input dataset/sample_claims.csv --output evaluation/sample_eval_results.csv --model gpt-4o
+```
 
-| Platform | Path |
-|---|---|
-| macOS / Linux | `$HOME/hackerrank_orchestrate/log.txt` |
-| Windows | `%USERPROFILE%\hackerrank_orchestrate\log.txt` |
+This produces:
 
-You will upload this log as your chat transcript at submission time. The chat transcript means your conversation with the AI coding tool you used to build the system. It is not the runtime logs, reasoning trace, or conversation history produced by the claim-verification agent you are building.
+- `evaluation/sample_eval_results.csv`
+- `evaluation/evaluation_report.md`
+- printed accuracy metrics for available labeled fields
 
-If you use multiple AI tools, include the relevant conversation logs from all of them in the same transcript file. Separate each tool's section with a clear divider and label it with the tool name.
+Compatibility entry point:
 
-Never paste secrets into the chat. If secrets are needed, use environment variables.
+```bash
+python code/evaluation/main.py --input dataset/sample_claims.csv --output evaluation/sample_eval_results.csv --model gpt-4o
+```
 
----
+## Generate Final Output
 
-## Submission
+```bash
+python src/main.py --input dataset/claims.csv --output output.csv --model gpt-4o
+```
 
-Submit the following files as instructed by HackerRank:
+This produces `output.csv` with the required columns:
 
-1. **Code zip**: zip your runnable solution, README, prompts/configs, and evaluation folder. Exclude virtualenvs, `node_modules`, build artifacts, and unnecessary generated files.
-2. **Predictions CSV**: your final `output.csv` for all rows in `dataset/claims.csv`.
-3. **Chat transcript**: the `log.txt` from the path in [Chat transcript logging](#chat-transcript-logging).
+```text
+user_id,image_paths,user_claim,claim_object,evidence_standard_met,evidence_standard_met_reason,risk_flags,issue_type,object_part,claim_status,claim_status_justification,supporting_image_ids,valid_image,severity
+```
 
-Before submitting, confirm:
+Compatibility entry point:
 
-- `output.csv` has one row per row in `dataset/claims.csv`.
-- `output.csv` has the exact required columns in the exact required order.
-- Your evaluation files are included in `code.zip`.
+```bash
+python code/main.py --input dataset/claims.csv --output output.csv --model gpt-4o
+```
 
----
+## Design Explanation
 
-## Judge interview
+The pipeline uses one OpenAI Vision call per claim row. Each request includes:
 
-After submission, the AI Judge may ask about your approach, implementation decisions, model usage, evaluation strategy, and how you used AI while building the solution.
+- claim object
+- user claim conversation
+- image IDs and image data
+- relevant user history for that user
+- evidence requirements matching the object plus global requirements
+- allowed enum values
+- strict JSON schema instructions
 
-Be prepared to explain your solution in detail.
+The model is asked to decide whether image evidence supports, contradicts, or is insufficient for the claim. The code then normalizes every model response before writing CSV.
+
+Invalid model enum values are replaced with safe fallbacks:
+
+- invalid `claim_status` -> `not_enough_information`
+- invalid `issue_type` -> `unknown`
+- invalid `object_part` -> `unknown`
+- invalid `severity` -> `unknown`
+- empty `risk_flags` -> `none`
+- empty `supporting_image_ids` -> `none`
+
+## Important Behavior Rules
+
+- User history never decides claim status by itself.
+- User history can only add `user_history_risk` and `manual_review_required`.
+- If no image is usable, the system returns `valid_image=false`, `evidence_standard_met=false`, `claim_status=not_enough_information`, `supporting_image_ids=none`, and `severity=unknown`.
+- If the relevant part is visible and claimed damage is absent, the system should return `contradicted`, `issue_type=none`, and `severity=none`.
+- If claimed damage is visible and matches the claim, the system should return `supported`.
+- Semicolon-separated CSV output is used for `risk_flags` and `supporting_image_ids`.
+
+## Operational Considerations
+
+- The default runner is sequential to keep rate-limit behavior simple and reproducible.
+- Retry logic handles rate limits, temporary API failures, connection errors, and JSON parsing failures.
+- If all retries fail, the row receives a safe manual-review fallback.
+- For larger datasets, add persistent caching keyed by prompt version, model, claim text, and image hashes.
+- For higher throughput, add bounded concurrency with RPM/TPM throttling.
+- Cost depends on current OpenAI GPT-4o text and image pricing, image resolution, and number of images per claim.
+
+## Assumptions
+
+- CSV image paths beginning with `images/` are resolved under `dataset/images/`.
+- Image IDs are filenames without extensions, such as `img_1`.
+- The expected object types are `car`, `laptop`, and `package`.
+- The OpenAI API is available at runtime for real predictions.
+- If the OpenAI package or API key is unavailable, the code returns safe fallback rows so the pipeline remains structurally runnable, but those fallback rows are not useful final predictions.
+
