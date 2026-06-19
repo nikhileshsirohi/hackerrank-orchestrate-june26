@@ -1,0 +1,284 @@
+Chat Transcript / Development Notes
+
+Project: Multi-Modal Evidence Review
+
+This document summarizes how I used ChatGPT/Codex during development of the submission.
+
+⸻
+
+1. Problem Understanding
+
+I first read and understood problem_statement.md myself.
+
+From the problem statement, I identified the main objective:
+
+* Read each claim from dataset/claims.csv.
+* Use the claim conversation to understand what damage is being claimed.
+* Use the submitted images as the primary source of truth.
+* Use user_history.csv only for risk context.
+* Use evidence_requirements.csv as the minimum evidence checklist.
+* Produce output.csv with exactly the required output columns and allowed values.
+
+I also understood that this challenge is not asking for a web API. It is a batch-processing and prediction-generation task. Therefore, I decided to build a command-line Python pipeline instead of a FastAPI/backend service.
+
+⸻
+
+2. Environment Setup
+
+I created the local project setup and Python virtual environment myself.
+
+The intended setup was:
+
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+I also ensured that the OpenAI API key would be loaded from environment variables or a .env file, and that no real secrets would be committed or included in the final code.zip.
+
+⸻
+
+3. Model Choice
+
+I chose GPT-4o because the problem requires image understanding.
+
+I considered whether traditional CNN models such as ResNet50 or VGG16 would be enough, but decided not to use them as the main approach because the task requires more than classification. The system needs to:
+
+* inspect image evidence,
+* identify visible damage,
+* identify object parts,
+* compare image evidence with the user claim,
+* decide support/contradiction/insufficient information,
+* return structured reasoning in the required schema.
+
+Therefore, I chose GPT-4o with image inputs as the primary reviewer. The API model name is gpt-4o; it behaves as a vision-capable model when image inputs are provided.
+
+⸻
+
+4. Use of Codex
+
+After understanding the problem and choosing the model approach, I used Codex to help build the implementation faster.
+
+Codex was used mainly for:
+
+* creating the Python batch pipeline structure,
+* writing reusable utility functions,
+* building the GPT-4o prompt structure,
+* adding strict JSON parsing and validation,
+* creating the evaluator for sample_claims.csv,
+* generating the evaluation report template,
+* improving CLI commands and README instructions.
+
+I did not use Codex to decide the core solution approach blindly. The main design decisions were:
+
+* use a batch pipeline, not an API,
+* use GPT-4o Vision,
+* use one model call per claim row,
+* treat images as the primary source of truth,
+* use user history only for risk flags,
+* validate all model outputs before writing output.csv.
+
+⸻
+
+5. Pipeline Design
+
+The final solution was organized as:
+
+* src/main.py: runs the final prediction pipeline on dataset/claims.csv.
+* src/evaluator.py: runs sample evaluation on dataset/sample_claims.csv.
+* src/llm_client.py: sends claim text and images to GPT-4o.
+* src/prompts.py: contains system and user prompts.
+* src/schemas.py: contains allowed enum values and output validation logic.
+* src/utils.py: contains helper functions for CSV reading, image path parsing, image encoding, user history lookup, and evidence requirement lookup.
+
+The pipeline uses one GPT-4o request per claim row.
+
+Each request includes:
+
+* claim object,
+* user claim conversation,
+* submitted image IDs,
+* submitted images,
+* matching user history,
+* matching evidence requirements,
+* allowed enum values,
+* strict JSON output schema.
+
+⸻
+
+6. Prompting Strategy
+
+The prompt was designed around the main rule from the problem statement:
+
+Images are the primary source of truth.
+
+The prompt instructs the model that:
+
+* if claimed damage is clearly visible, return supported;
+* if the relevant object part is visible but the claimed damage is absent, return contradicted;
+* if the relevant part is not visible, the image is unclear, or the wrong object is shown, return not_enough_information;
+* user history can add risk flags but must not override image evidence;
+* output must use only the allowed enum values;
+* output must be valid JSON only.
+
+⸻
+
+7. Validation Strategy
+
+I added post-processing so that the final CSV is always schema-safe.
+
+The code validates and normalizes:
+
+* claim_status
+* issue_type
+* object_part
+* risk_flags
+* severity
+* supporting_image_ids
+
+Invalid values are replaced with safe fallbacks:
+
+* invalid claim_status -> not_enough_information
+* invalid issue_type -> unknown
+* invalid object_part -> unknown
+* invalid severity -> unknown
+* empty risk_flags -> none
+* empty supporting_image_ids -> none
+
+This ensures the final output.csv follows the required schema and enum constraints.
+
+⸻
+
+8. Codex Session Summary
+
+Session Start
+
+* Date/time: 2026-06-19T13:30:28+05:30
+* Tool: OpenAI Codex
+* Repository: hackerrank-orchestrate-june26
+* Language: Python
+
+Codex Task
+
+I asked Codex to help implement the batch evidence review pipeline after I had already understood the problem and decided the approach.
+
+The implementation request included:
+
+* read and respect problem_statement.md,
+* inspect dataset CSVs and image folder structure,
+* implement a runnable Python batch pipeline,
+* use GPT-4o image inputs,
+* create prompt and schema validation logic,
+* create sample evaluator,
+* create operational evaluation report,
+* create README and requirements file,
+* ensure final output uses the exact required CSV schema.
+
+Codex Implementation Summary
+
+Codex helped create the following implementation pieces:
+
+* source files under src/,
+* schema validation and enum normalization,
+* OpenAI GPT-4o client logic,
+* image encoding utilities,
+* prompt construction,
+* final prediction CLI,
+* sample evaluation CLI,
+* README,
+* requirements file,
+* evaluation report structure.
+
+Codex also helped run structural checks such as:
+
+* Python syntax compilation,
+* CLI help verification,
+* output column validation,
+* sample/final pipeline smoke tests.
+
+⸻
+
+9. Important Clarification
+
+During the initial Codex implementation, OPENAI_API_KEY was not configured in the shell. Because of that, Codex-generated smoke-test outputs were only structural fallback outputs used to verify the pipeline and CSV schema.
+
+After configuring the API key, I ran the actual GPT-4o Vision evaluation and final prediction commands. The final submitted output.csv was generated using GPT-4o with image inputs, not the fallback output.
+
+⸻
+
+10. Sample Evaluation
+
+I ran the evaluator on dataset/sample_claims.csv.
+
+Tracked sample metrics:
+
+* claim_status accuracy: 0.800
+* issue_type accuracy: 0.800
+* object_part accuracy: 0.950
+* evidence_standard_met accuracy: 0.950
+* valid_image accuracy: 0.950
+* severity accuracy: 0.800
+
+The sample error analysis showed that most mismatches were borderline visual cases where the model interpreted damage more generously than the sample label.
+
+⸻
+
+11. Final Output
+
+I generated the final output.csv using the implemented pipeline.
+
+Final output validation:
+
+* 44 rows
+* 14 required columns
+* 0 schema/enum/fallback errors
+
+Final claim_status distribution:
+
+* supported: 20
+* contradicted: 16
+* not_enough_information: 8
+
+Final valid_image distribution:
+
+* true: 38
+* false: 6
+
+⸻
+
+12. Operational Analysis
+
+The final evaluation/evaluation_report.md includes:
+
+* model used,
+* number of model calls,
+* number of images processed,
+* approximate token and cost assumptions,
+* latency/runtime discussion,
+* TPM/RPM considerations,
+* retry strategy,
+* caching strategy,
+* limitations and failure cases.
+
+The implementation uses sequential processing because the dataset is small. For a larger production dataset, bounded concurrency, throttling, caching, and batch processing could be added.
+
+⸻
+
+13. Final Submission Files
+
+The final submission includes:
+
+* code.zip
+* output.csv
+* chat_transcript.txt
+
+The code.zip contains:
+
+* runnable Python source code,
+* README.md,
+* requirements.txt,
+* prompt/config files,
+* evaluation/ folder,
+* evaluation/evaluation_report.md,
+* sample evaluation artifacts.
+
+No API keys or secrets are included.
