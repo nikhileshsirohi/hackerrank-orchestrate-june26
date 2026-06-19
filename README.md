@@ -31,9 +31,11 @@ The system reads claim rows from CSV, sends each claim and its submitted images 
 │   └── evaluation/main.py
 ├── evaluation/
 │   ├── evaluation_report.md
+│   ├── sample_error_analysis.csv
 │   └── sample_eval_results.csv
 ├── requirements.txt
 ├── README.md
+├── chat_transcript.txt
 └── output.csv
 ```
 
@@ -74,8 +76,20 @@ python src/evaluator.py --input dataset/sample_claims.csv --output evaluation/sa
 This produces:
 
 - `evaluation/sample_eval_results.csv`
+- `evaluation/sample_error_analysis.csv`
 - `evaluation/evaluation_report.md`
 - printed accuracy metrics for available labeled fields
+
+Latest sample metrics from the final run:
+
+```text
+claim_status: 0.800
+issue_type: 0.800
+object_part: 0.950
+evidence_standard_met: 0.950
+valid_image: 0.950
+severity: 0.800
+```
 
 Compatibility entry point:
 
@@ -101,6 +115,14 @@ Compatibility entry point:
 python code/main.py --input dataset/claims.csv --output output.csv --model gpt-4o
 ```
 
+Final `output.csv` validation from the submitted run:
+
+```text
+rows: 44
+required columns: 14
+schema/enum/fallback errors: 0
+```
+
 ## Design Explanation
 
 The pipeline uses one OpenAI Vision call per claim row. Each request includes:
@@ -112,6 +134,8 @@ The pipeline uses one OpenAI Vision call per claim row. Each request includes:
 - evidence requirements matching the object plus global requirements
 - allowed enum values
 - strict JSON schema instructions
+
+Before images are sent to the model, they are normalized through Pillow into standard RGB JPEG data URLs. This avoids API failures from unusual source image encodings and keeps the input format consistent.
 
 The model is asked to decide whether image evidence supports, contradicts, or is insufficient for the claim. The code then normalizes every model response before writing CSV.
 
@@ -136,11 +160,37 @@ Invalid model enum values are replaced with safe fallbacks:
 ## Operational Considerations
 
 - The default runner is sequential to keep rate-limit behavior simple and reproducible.
-- Retry logic handles rate limits, temporary API failures, connection errors, and JSON parsing failures.
+- Retry logic handles rate limits, temporary API failures, timeouts, connection errors, and JSON parsing failures.
+- OpenAI requests use a 75-second timeout so a stalled row does not block the run indefinitely.
+- While processing, the runner writes `output.csv.partial` after each completed row. At the end, it writes final `output.csv` and removes the partial file.
 - If all retries fail, the row receives a safe manual-review fallback.
 - For larger datasets, add persistent caching keyed by prompt version, model, claim text, and image hashes.
 - For higher throughput, add bounded concurrency with RPM/TPM throttling.
 - Cost depends on current OpenAI GPT-4o text and image pricing, image resolution, and number of images per claim.
+
+## Submission Files
+
+Upload:
+
+- `output.csv`
+- `chat_transcript.txt`
+- `code.zip`
+
+Recommended `code.zip` contents:
+
+- `src/`
+- `code/`
+- `evaluation/`
+- `README.md`
+- `requirements.txt`
+- `problem_statement.md`
+
+Exclude local/generated environment artifacts:
+
+- `.venv/`
+- `__pycache__/`
+- `.DS_Store`
+- `.env`
 
 ## Assumptions
 
@@ -149,4 +199,3 @@ Invalid model enum values are replaced with safe fallbacks:
 - The expected object types are `car`, `laptop`, and `package`.
 - The OpenAI API is available at runtime for real predictions.
 - If the OpenAI package or API key is unavailable, the code returns safe fallback rows so the pipeline remains structurally runnable, but those fallback rows are not useful final predictions.
-
